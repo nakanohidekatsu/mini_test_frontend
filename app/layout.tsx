@@ -1,0 +1,23 @@
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import './globals.css'
+
+const inter = Inter({ subsets: ['latin'] })
+
+export const metadata: Metadata = {
+  title: 'AI過去問クイズアプリ',
+  description: '過去問をAIで解析し、選択問題で学習できるアプリ',
+  manifest: '/manifest.json',
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="ja" suppressHydrationWarning>
+      <body className={inter.className}>{children}</body>
+    </html>
+  )
+}
