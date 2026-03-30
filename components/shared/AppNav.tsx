@@ -83,8 +83,6 @@ export default function AppNav({ user }: { user: User }) {
         ))}
       </nav>
 
-      {/* Desktop content margin */}
-      <div className="hidden md:block ml-56" />
     </>
   )
 }

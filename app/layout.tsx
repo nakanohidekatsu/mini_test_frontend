@@ -7,7 +7,6 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'AI過去問クイズアプリ',
   description: '過去問をAIで解析し、選択問題で学習できるアプリ',
-  manifest: '/manifest.json',
 }
 
 export default function RootLayout({
