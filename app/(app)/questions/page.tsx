@@ -11,6 +11,7 @@ interface QuestionsResponse {
   questions: Question[]
   page: number
   per_page: number
+  total: number
 }
 
 const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: '易', medium: '中', hard: '難' }
@@ -231,6 +232,7 @@ export default function QuestionsPage() {
   const initialSetId = searchParams.get('question_set_id') ?? undefined
 
   const [questions, setQuestions] = useState<Question[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [filters, setFilters] = useState<QuestionFilters>({ page: 1, per_page: 20, question_set_id: initialSetId })
@@ -265,6 +267,7 @@ export default function QuestionsPage() {
         }
       })
       setQuestions(normalized)
+      setTotal(data.total ?? normalized.length)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '取得に失敗しました')
     } finally {
@@ -299,7 +302,7 @@ export default function QuestionsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">問題一覧</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">{questions.length}問</p>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">{total}問</p>
         </div>
         <div className="flex gap-2">
           <Link href="/questions/import" className="flex items-center gap-2 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
@@ -404,6 +407,7 @@ export default function QuestionsPage() {
       ) : (
         <div className="space-y-2">
           {questions.map((q, i) => {
+            const globalIndex = ((filters.page ?? 1) - 1) * (filters.per_page ?? 20) + i + 1
             const setName = questionSets.find(s => s.id === q.question_set_id)?.name
             const isExpanded = expandedId === q.id
             return (
@@ -418,7 +422,7 @@ export default function QuestionsPage() {
                   className="w-full flex items-start gap-4 p-4 text-left"
                 >
                   <span className="shrink-0 w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center text-sm font-medium">
-                    {i + 1}
+                    {globalIndex}
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-slate-900 dark:text-white text-sm font-medium line-clamp-2">{q.question_text}</p>
@@ -462,6 +466,29 @@ export default function QuestionsPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* ページネーション */}
+      {!loading && !error && total > (filters.per_page ?? 20) && (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => { setFilters(f => ({ ...f, page: (f.page ?? 1) - 1 })); setExpandedId(null) }}
+            disabled={(filters.page ?? 1) <= 1}
+            className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            前へ
+          </button>
+          <span className="text-sm text-slate-500 dark:text-slate-400 px-2">
+            {filters.page ?? 1} / {Math.ceil(total / (filters.per_page ?? 20))} ページ
+          </span>
+          <button
+            onClick={() => { setFilters(f => ({ ...f, page: (f.page ?? 1) + 1 })); setExpandedId(null) }}
+            disabled={(filters.page ?? 1) >= Math.ceil(total / (filters.per_page ?? 20))}
+            className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            次へ
+          </button>
         </div>
       )}
     </div>
