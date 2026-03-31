@@ -255,7 +255,16 @@ export default function QuestionsPage() {
       params.set('page', String(filters.page ?? 1))
       params.set('per_page', String(filters.per_page ?? 20))
       const data = await apiRequest<QuestionsResponse>(`/api/v1/questions?${params}`)
-      setQuestions(data.questions)
+      // Normalize Supabase join field names: question_choices → choices, question_tags → tags
+      const normalized = data.questions.map(q => {
+        const raw = q as unknown as Record<string, unknown>
+        return {
+          ...q,
+          choices: (raw.question_choices as QuestionChoice[] | undefined) ?? q.choices ?? [],
+          tags: ((raw.question_tags as { tag: string }[] | undefined) ?? []).map(t => t.tag),
+        }
+      })
+      setQuestions(normalized)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '取得に失敗しました')
     } finally {
