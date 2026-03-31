@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Search, Plus, Download, Upload, BookOpen, Loader2, Trash2, FolderOpen } from 'lucide-react'
+import { Search, Plus, Download, Upload, BookOpen, Loader2, Trash2, FolderOpen, ChevronDown, ChevronUp, Save, X } from 'lucide-react'
 import { apiRequest } from '@/lib/api/client'
-import type { Question, Difficulty, QuestionFilters, QuestionSet } from '@/types'
+import type { Question, QuestionChoice, Difficulty, QuestionFilters, QuestionSet } from '@/types'
 import Link from 'next/link'
 
 interface QuestionsResponse {
@@ -13,16 +13,217 @@ interface QuestionsResponse {
   per_page: number
 }
 
-const DIFFICULTY_LABELS: Record<Difficulty, string> = {
-  easy: '易',
-  medium: '中',
-  hard: '難',
-}
-
+const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: '易', medium: '中', hard: '難' }
 const DIFFICULTY_COLORS: Record<Difficulty, string> = {
   easy: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   medium: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
   hard: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+}
+
+interface EditState {
+  question_text: string
+  explanation: string
+  category: string
+  difficulty: Difficulty | ''
+  question_set_id: string
+  correct_choice_id: string
+  choices: { id: string; choice_text: string; display_order: number }[]
+}
+
+function QuestionDetail({
+  question,
+  questionSets,
+  onSaved,
+  onDeleted,
+}: {
+  question: Question
+  questionSets: QuestionSet[]
+  onSaved: (updated: Question) => void
+  onDeleted: () => void
+}) {
+  const choices = (question.choices ?? []).slice().sort((a, b) => a.display_order - b.display_order)
+
+  const [edit, setEdit] = useState<EditState>({
+    question_text: question.question_text,
+    explanation: question.explanation ?? '',
+    category: question.category ?? '',
+    difficulty: question.difficulty ?? '',
+    question_set_id: question.question_set_id ?? '',
+    correct_choice_id: question.correct_choice_id ?? '',
+    choices: choices.map(c => ({ id: c.id, choice_text: c.choice_text, display_order: c.display_order })),
+  })
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+
+  function update<K extends keyof EditState>(key: K, value: EditState[K]) {
+    setEdit(prev => ({ ...prev, [key]: value }))
+    setDirty(true)
+  }
+
+  function updateChoice(index: number, text: string) {
+    setEdit(prev => ({
+      ...prev,
+      choices: prev.choices.map((c, i) => i === index ? { ...c, choice_text: text } : c),
+    }))
+    setDirty(true)
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const updated = await apiRequest<Question>(`/api/v1/questions/${question.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          question_text: edit.question_text,
+          explanation: edit.explanation || null,
+          category: edit.category || null,
+          difficulty: edit.difficulty || null,
+          question_set_id: edit.question_set_id || null,
+          correct_choice_id: edit.correct_choice_id || null,
+          choices: edit.choices.map(c => ({ id: c.id, choice_text: c.choice_text })),
+        }),
+      })
+      setDirty(false)
+      onSaved(updated)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '保存に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm('この問題を削除しますか？')) return
+    try {
+      await apiRequest(`/api/v1/questions/${question.id}`, { method: 'DELETE' })
+      onDeleted()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '削除に失敗しました')
+    }
+  }
+
+  return (
+    <div className="border-t border-slate-100 dark:border-slate-700 px-4 pb-4 pt-3 space-y-4 bg-slate-50 dark:bg-slate-900/50">
+      {/* 問題文 */}
+      <div>
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">問題文</label>
+        <textarea
+          value={edit.question_text}
+          onChange={e => update('question_text', e.target.value)}
+          rows={3}
+          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+        />
+      </div>
+
+      {/* 選択肢 */}
+      <div>
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">選択肢</label>
+        <div className="space-y-2">
+          {edit.choices.map((c, i) => (
+            <div key={c.id} className="flex items-center gap-2">
+              <input
+                type="radio"
+                name={`correct-${question.id}`}
+                checked={edit.correct_choice_id === c.id}
+                onChange={() => update('correct_choice_id', c.id)}
+                className="accent-primary-600 shrink-0"
+                title="正解に設定"
+              />
+              <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                edit.correct_choice_id === c.id
+                  ? 'bg-primary-100 dark:bg-primary-900/40 text-primary-600 dark:text-primary-400'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-500'
+              }`}>
+                {String.fromCharCode(65 + i)}
+              </span>
+              <input
+                type="text"
+                value={c.choice_text}
+                onChange={e => updateChoice(i, e.target.value)}
+                className="flex-1 px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-slate-400 mt-1">ラジオボタンで正解を選択</p>
+      </div>
+
+      {/* 解説 */}
+      <div>
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">解説</label>
+        <textarea
+          value={edit.explanation}
+          onChange={e => update('explanation', e.target.value)}
+          rows={2}
+          placeholder="解説文（任意）"
+          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+        />
+      </div>
+
+      {/* メタ情報 */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">カテゴリ</label>
+          <input
+            type="text"
+            value={edit.category}
+            onChange={e => update('category', e.target.value)}
+            placeholder="例: 数学"
+            className="w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">難易度</label>
+          <select
+            value={edit.difficulty}
+            onChange={e => update('difficulty', e.target.value as Difficulty | '')}
+            className="w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="">未設定</option>
+            <option value="easy">易</option>
+            <option value="medium">中</option>
+            <option value="hard">難</option>
+          </select>
+        </div>
+        <div className="col-span-2 sm:col-span-1">
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">問題集</label>
+          <select
+            value={edit.question_set_id}
+            onChange={e => update('question_set_id', e.target.value)}
+            className="w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="">未割り当て</option>
+            {questionSets.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* アクション */}
+      <div className="flex items-center justify-between pt-1">
+        <button
+          onClick={handleDelete}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />削除
+        </button>
+        <div className="flex items-center gap-2">
+          {dirty && (
+            <span className="text-xs text-slate-400">未保存の変更があります</span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving || !dirty}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function QuestionsPage() {
@@ -34,22 +235,12 @@ export default function QuestionsPage() {
   const [error, setError] = useState('')
   const [filters, setFilters] = useState<QuestionFilters>({ page: 1, per_page: 20, question_set_id: initialSetId })
   const [keyword, setKeyword] = useState('')
-
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [questionSets, setQuestionSets] = useState<QuestionSet[]>([])
 
   useEffect(() => {
     apiRequest<QuestionSet[]>('/api/v1/question-sets').then(setQuestionSets).catch(() => {})
   }, [])
-
-  async function handleDelete(questionId: string) {
-    if (!confirm('この問題を削除しますか？')) return
-    try {
-      await apiRequest(`/api/v1/questions/${questionId}`, { method: 'DELETE' })
-      setQuestions(prev => prev.filter(q => q.id !== questionId))
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : '削除に失敗しました')
-    }
-  }
 
   const fetchQuestions = useCallback(async () => {
     setLoading(true)
@@ -77,6 +268,19 @@ export default function QuestionsPage() {
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
     setFilters(f => ({ ...f, keyword, page: 1 }))
+  }
+
+  function toggleExpand(id: string) {
+    setExpandedId(prev => prev === id ? null : id)
+  }
+
+  function handleSaved(updated: Question) {
+    setQuestions(prev => prev.map(q => q.id === updated.id ? updated : q))
+  }
+
+  function handleDeleted(id: string) {
+    setQuestions(prev => prev.filter(q => q.id !== id))
+    setExpandedId(null)
   }
 
   const activeSetName = questionSets.find(s => s.id === filters.question_set_id)?.name
@@ -125,7 +329,6 @@ export default function QuestionsPage() {
           </button>
         </form>
 
-        {/* 問題集フィルタ */}
         {questionSets.length > 0 && (
           <div className="flex items-center gap-2">
             <FolderOpen className="w-4 h-4 text-slate-400 shrink-0" />
@@ -167,7 +370,6 @@ export default function QuestionsPage() {
         </div>
       </div>
 
-      {/* アクティブフィルタ表示 */}
       {activeSetName && (
         <div className="flex items-center gap-2 text-sm text-primary-600 dark:text-primary-400">
           <FolderOpen className="w-4 h-4" />
@@ -194,43 +396,60 @@ export default function QuestionsPage() {
         <div className="space-y-2">
           {questions.map((q, i) => {
             const setName = questionSets.find(s => s.id === q.question_set_id)?.name
+            const isExpanded = expandedId === q.id
             return (
-              <div key={q.id} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-start gap-4 hover:border-primary-300 dark:hover:border-primary-700 transition-colors">
-                <span className="shrink-0 w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center text-sm font-medium">
-                  {i + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-slate-900 dark:text-white text-sm font-medium line-clamp-2">{q.question_text}</p>
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    {setName && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 text-xs rounded-full">
-                        <FolderOpen className="w-3 h-3" />{setName}
-                      </span>
-                    )}
-                    {q.category && (
-                      <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs rounded-full">
-                        {q.category}
-                      </span>
-                    )}
-                    {q.difficulty && (
-                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${DIFFICULTY_COLORS[q.difficulty]}`}>
-                        {DIFFICULTY_LABELS[q.difficulty]}
-                      </span>
-                    )}
-                    {q.tags?.map(tag => (
-                      <span key={tag} className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs rounded-full">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+              <div key={q.id} className={`bg-white dark:bg-slate-800 rounded-xl border transition-colors overflow-hidden ${
+                isExpanded
+                  ? 'border-primary-400 dark:border-primary-600'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700'
+              }`}>
+                {/* 問題ヘッダー（クリックで展開） */}
                 <button
-                  onClick={() => handleDelete(q.id)}
-                  className="shrink-0 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                  title="削除"
+                  onClick={() => toggleExpand(q.id)}
+                  className="w-full flex items-start gap-4 p-4 text-left"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <span className="shrink-0 w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center text-sm font-medium">
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-slate-900 dark:text-white text-sm font-medium line-clamp-2">{q.question_text}</p>
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {setName && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 text-xs rounded-full">
+                          <FolderOpen className="w-3 h-3" />{setName}
+                        </span>
+                      )}
+                      {q.category && (
+                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs rounded-full">
+                          {q.category}
+                        </span>
+                      )}
+                      {q.difficulty && (
+                        <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${DIFFICULTY_COLORS[q.difficulty]}`}>
+                          {DIFFICULTY_LABELS[q.difficulty]}
+                        </span>
+                      )}
+                      {q.tags?.map(tag => (
+                        <span key={tag} className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs rounded-full">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-slate-400 mt-1">
+                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </span>
                 </button>
+
+                {/* 詳細・編集パネル */}
+                {isExpanded && (
+                  <QuestionDetail
+                    question={q}
+                    questionSets={questionSets}
+                    onSaved={handleSaved}
+                    onDeleted={() => handleDeleted(q.id)}
+                  />
+                )}
               </div>
             )
           })}
