@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, LayoutDashboard, List, Upload, Play, History, Settings, LogOut } from 'lucide-react'
+import { BookOpen, LayoutDashboard, List, Upload, Play, History, Settings, LogOut, FolderOpen } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
 import { clsx } from 'clsx'
 
 const navItems = [
   { href: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
+  { href: '/question-sets', label: '問題集', icon: FolderOpen },
   { href: '/questions', label: '問題一覧', icon: List },
   { href: '/upload', label: 'AI解析', icon: Upload },
   { href: '/quiz', label: 'クイズ', icon: Play },

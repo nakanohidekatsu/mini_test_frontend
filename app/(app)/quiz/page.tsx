@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Play, Loader2, BookOpen, Clock, Shuffle, RotateCcw, AlertCircle } from 'lucide-react'
+import { Play, Loader2, BookOpen, Clock, Shuffle, RotateCcw, AlertCircle, FolderOpen } from 'lucide-react'
 import { apiRequest } from '@/lib/api/client'
-import type { QuizMode } from '@/types'
+import type { QuizMode, QuestionSet } from '@/types'
 
 interface QuizStartResponse {
   session_id: string
@@ -20,6 +20,7 @@ const MODES: Array<{ value: QuizMode; label: string; icon: React.ElementType; de
   { value: 'srs', label: '復習 (SRS)', icon: RotateCcw, desc: '今日復習すべき問題を出題' },
   { value: 'weak', label: '苦手問題', icon: AlertCircle, desc: '正答率の低い問題を優先' },
   { value: 'category', label: 'カテゴリ別', icon: BookOpen, desc: 'カテゴリを選んで出題' },
+  { value: 'question_set', label: '問題集', icon: FolderOpen, desc: '問題集を選んで出題' },
 ]
 
 export default function QuizStartPage() {
@@ -29,15 +30,34 @@ export default function QuizStartPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const [questionSets, setQuestionSets] = useState<QuestionSet[]>([])
+  const [selectedSetId, setSelectedSetId] = useState('')
+  const [loadingSets, setLoadingSets] = useState(false)
+
+  useEffect(() => {
+    if (mode === 'question_set') {
+      setLoadingSets(true)
+      apiRequest<QuestionSet[]>('/api/v1/question-sets')
+        .then(data => { setQuestionSets(data); if (data.length > 0 && !selectedSetId) setSelectedSetId(data[0].id) })
+        .catch(() => {})
+        .finally(() => setLoadingSets(false))
+    }
+  }, [mode])
+
   async function startQuiz() {
+    if (mode === 'question_set' && !selectedSetId) {
+      setError('問題集を選択してください')
+      return
+    }
     setLoading(true)
     setError('')
     try {
+      const body: Record<string, unknown> = { mode, limit }
+      if (mode === 'question_set') body.question_set_id = selectedSetId
       const data = await apiRequest<QuizStartResponse>('/api/v1/quiz/start', {
         method: 'POST',
-        body: JSON.stringify({ mode, limit }),
+        body: JSON.stringify(body),
       })
-      // Store questions in sessionStorage for the quiz session
       sessionStorage.setItem(`quiz_${data.session_id}`, JSON.stringify(data.questions))
       router.push(`/quiz/${data.session_id}`)
     } catch (err: unknown) {
@@ -82,6 +102,33 @@ export default function QuizStartPage() {
           </div>
         </div>
 
+        {/* 問題集選択 */}
+        {mode === 'question_set' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">問題集を選択</label>
+            {loadingSets ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Loader2 className="w-4 h-4 animate-spin" />読み込み中...
+              </div>
+            ) : questionSets.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                問題集がありません。
+                <a href="/question-sets" className="text-primary-600 hover:underline ml-1">問題集を作成する →</a>
+              </p>
+            ) : (
+              <select
+                value={selectedSetId}
+                onChange={e => setSelectedSetId(e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                {questionSets.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}（{s.question_count ?? 0}問）</option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             問題数: <span className="text-primary-600 font-semibold">{limit}問</span>
@@ -102,7 +149,7 @@ export default function QuizStartPage() {
 
         <button
           onClick={startQuiz}
-          disabled={loading}
+          disabled={loading || (mode === 'question_set' && !selectedSetId)}
           className="w-full flex items-center justify-center gap-2 py-3 px-6 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors text-base"
         >
           {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}

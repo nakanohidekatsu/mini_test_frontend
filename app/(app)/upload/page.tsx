@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { Upload, File, Loader2, CheckCircle, AlertCircle, Sparkles, X } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { Upload, File, Loader2, CheckCircle, AlertCircle, Sparkles, X, FolderOpen } from 'lucide-react'
 import { apiRequest } from '@/lib/api/client'
+import type { QuestionSet } from '@/types'
 
 interface ParseResult {
   source_id: string
@@ -30,6 +31,12 @@ export default function UploadPage() {
   const [dragOver, setDragOver] = useState(false)
   const [maxQuestions, setMaxQuestions] = useState(10)
   const [running, setRunning] = useState(false)
+  const [questionSets, setQuestionSets] = useState<QuestionSet[]>([])
+  const [selectedSetId, setSelectedSetId] = useState('')
+
+  useEffect(() => {
+    apiRequest<QuestionSet[]>('/api/v1/question-sets').then(setQuestionSets).catch(() => {})
+  }, [])
 
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const pdfs = Array.from(newFiles).filter(f => f.type === 'application/pdf' || f.name.endsWith('.pdf'))
@@ -102,9 +109,11 @@ export default function UploadPage() {
 
       // Generate
       try {
+        const generateBody: Record<string, unknown> = { source_id: sourceId, max_questions: maxQuestions }
+        if (selectedSetId) generateBody.question_set_id = selectedSetId
         const result = await apiRequest<GenerateResult>('/api/v1/generate/questions', {
           method: 'POST',
-          body: JSON.stringify({ source_id: sourceId, max_questions: maxQuestions }),
+          body: JSON.stringify(generateBody),
         })
         updateEntry(i, { status: 'done', generated: result.generated })
       } catch (err) {
@@ -187,6 +196,26 @@ export default function UploadPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 問題集選択 */}
+      {hasFiles && questionSets.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <span className="flex items-center gap-1.5"><FolderOpen className="w-4 h-4" />問題集に追加（任意）</span>
+          </label>
+          <select
+            value={selectedSetId}
+            onChange={e => setSelectedSetId(e.target.value)}
+            disabled={running}
+            className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="">問題集に追加しない</option>
+            {questionSets.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
         </div>
       )}
 

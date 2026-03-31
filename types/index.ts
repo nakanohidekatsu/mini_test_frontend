@@ -1,5 +1,5 @@
 export type Difficulty = 'easy' | 'medium' | 'hard'
-export type QuizMode = 'random' | 'category' | 'srs' | 'weak'
+export type QuizMode = 'random' | 'category' | 'srs' | 'weak' | 'question_set'
 export type ParseStatus = 'pending' | 'processing' | 'done' | 'error'
 export type SourceType = 'pdf' | 'image' | 'text' | 'csv' | 'json'
 
@@ -17,10 +17,21 @@ export interface QuestionChoice {
   display_order: number
 }
 
+export interface QuestionSet {
+  id: string
+  user_id: string
+  name: string
+  description: string
+  created_at: string
+  updated_at: string
+  question_count?: number
+}
+
 export interface Question {
   id: string
   user_id: string
   source_id: string | null
+  question_set_id: string | null
   category: string | null
   difficulty: Difficulty | null
   question_text: string
@@ -97,6 +108,7 @@ export interface QuestionFilters {
   difficulty?: Difficulty
   tag?: string
   keyword?: string
+  question_set_id?: string
   page?: number
   per_page?: number
 }
