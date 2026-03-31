@@ -23,7 +23,6 @@ interface FileEntry {
   status: FileStatus
   error?: string
   sourceId?: string
-  generated?: number
 }
 
 export default function UploadPage() {
@@ -31,6 +30,7 @@ export default function UploadPage() {
   const [dragOver, setDragOver] = useState(false)
   const [maxQuestions, setMaxQuestions] = useState(10)
   const [running, setRunning] = useState(false)
+  const [totalGenerated, setTotalGenerated] = useState<number | null>(null)
   const [questionSets, setQuestionSets] = useState<QuestionSet[]>([])
   const [selectedSetId, setSelectedSetId] = useState('')
 
@@ -45,6 +45,7 @@ export default function UploadPage() {
       ...prev,
       ...pdfs.map(f => ({ file: f, sourceName: f.name.replace(/\.pdf$/i, ''), status: 'pending' as FileStatus })),
     ])
+    setTotalGenerated(null)
   }, [])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -75,15 +76,16 @@ export default function UploadPage() {
 
   async function processAll() {
     setRunning(true)
+    setTotalGenerated(null)
     const headers = await getAuthHeaders()
+    const snapshot = [...files]
+    const targets = snapshot.map((f, i) => ({ ...f, index: i })).filter(f => f.status !== 'done')
 
-    for (let i = 0; i < files.length; i++) {
-      const entry = files[i]
-      if (entry.status === 'done') continue
+    // === Phase 1: 全ファイルを解析 ===
+    const parsedResults: { index: number; sourceId: string }[] = []
 
-      // Parse
-      updateEntry(i, { status: 'parsing', error: undefined })
-      let sourceId: string
+    for (const entry of targets) {
+      updateEntry(entry.index, { status: 'parsing', error: undefined })
       try {
         const formData = new FormData()
         formData.append('file', entry.file)
@@ -100,39 +102,52 @@ export default function UploadPage() {
           throw new Error(err.detail ?? 'アップロードに失敗しました')
         }
         const parsed: ParseResult = await res.json()
-        sourceId = parsed.source_id
-        updateEntry(i, { status: 'generating', sourceId })
+        updateEntry(entry.index, { status: 'parsed', sourceId: parsed.source_id })
+        parsedResults.push({ index: entry.index, sourceId: parsed.source_id })
       } catch (err) {
-        updateEntry(i, { status: 'error', error: err instanceof Error ? err.message : 'エラーが発生しました' })
-        continue
+        updateEntry(entry.index, { status: 'error', error: err instanceof Error ? err.message : 'エラーが発生しました' })
       }
+    }
 
-      // Generate
-      try {
-        const generateBody: Record<string, unknown> = { source_id: sourceId, max_questions: maxQuestions }
-        if (selectedSetId) generateBody.question_set_id = selectedSetId
-        const result = await apiRequest<GenerateResult>('/api/v1/generate/questions', {
-          method: 'POST',
-          body: JSON.stringify(generateBody),
-        })
-        updateEntry(i, { status: 'done', generated: result.generated })
-      } catch (err) {
-        updateEntry(i, { status: 'error', error: err instanceof Error ? err.message : '問題生成に失敗しました' })
+    if (parsedResults.length === 0) {
+      setRunning(false)
+      return
+    }
+
+    // === Phase 2: 全 source_id をまとめて1回のAI生成 ===
+    parsedResults.forEach(({ index }) => updateEntry(index, { status: 'generating' }))
+
+    try {
+      const generateBody: Record<string, unknown> = {
+        source_ids: parsedResults.map(r => r.sourceId),
+        max_questions: maxQuestions,
       }
+      if (selectedSetId) generateBody.question_set_id = selectedSetId
+
+      const result = await apiRequest<GenerateResult>('/api/v1/generate/questions', {
+        method: 'POST',
+        body: JSON.stringify(generateBody),
+      })
+
+      parsedResults.forEach(({ index }) => updateEntry(index, { status: 'done' }))
+      setTotalGenerated(result.generated)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '問題生成に失敗しました'
+      parsedResults.forEach(({ index }) => updateEntry(index, { status: 'error', error: msg }))
     }
 
     setRunning(false)
   }
 
-  const pendingCount = files.filter(f => f.status === 'pending').length
-  const doneCount = files.filter(f => f.status === 'done').length
+  const pendingCount = files.filter(f => f.status === 'pending' || f.status === 'error').length
   const hasFiles = files.length > 0
+  const allDone = hasFiles && files.every(f => f.status === 'done')
 
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">AI解析・問題生成</h1>
-        <p className="text-slate-500 dark:text-slate-400 mt-1">PDFから選択問題を自動生成（複数ファイル対応）</p>
+        <p className="text-slate-500 dark:text-slate-400 mt-1">複数PDFをまとめて解析し、一括で問題を生成</p>
       </div>
 
       {/* Drop zone */}
@@ -178,16 +193,24 @@ export default function UploadPage() {
                     <X className="w-4 h-4" />
                   </button>
                 )}
-                {(entry.status === 'parsing' || entry.status === 'generating') && (
+                {entry.status === 'parsing' && (
                   <div className="flex items-center gap-1.5 text-xs text-primary-600">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {entry.status === 'parsing' ? '解析中' : 'AI生成中'}
+                    <Loader2 className="w-4 h-4 animate-spin" />解析中
+                  </div>
+                )}
+                {entry.status === 'parsed' && (
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                    <CheckCircle className="w-4 h-4 text-slate-400" />解析完了
+                  </div>
+                )}
+                {entry.status === 'generating' && (
+                  <div className="flex items-center gap-1.5 text-xs text-primary-600">
+                    <Loader2 className="w-4 h-4 animate-spin" />AI生成中
                   </div>
                 )}
                 {entry.status === 'done' && (
                   <div className="flex items-center gap-1.5 text-xs text-green-600">
-                    <CheckCircle className="w-4 h-4" />
-                    {entry.generated}問生成
+                    <CheckCircle className="w-4 h-4" />完了
                   </div>
                 )}
                 {entry.status === 'error' && (
@@ -196,6 +219,14 @@ export default function UploadPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 生成結果 */}
+      {totalGenerated !== null && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400 text-sm font-medium">
+          <CheckCircle className="w-4 h-4" />
+          {files.filter(f => f.status === 'done').length}ファイルから合計 <strong>{totalGenerated}問</strong> を生成しました
         </div>
       )}
 
@@ -223,12 +254,12 @@ export default function UploadPage() {
       {hasFiles && (
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            1ファイルあたりの生成問題数: <span className="text-primary-600 font-semibold">{maxQuestions}問</span>
+            生成問題数（全ファイル合計）: <span className="text-primary-600 font-semibold">{maxQuestions}問</span>
           </label>
           <input
             type="range"
             min={5}
-            max={20}
+            max={30}
             value={maxQuestions}
             onChange={e => setMaxQuestions(Number(e.target.value))}
             disabled={running}
@@ -236,7 +267,7 @@ export default function UploadPage() {
           />
           <div className="flex justify-between text-xs text-slate-400 mt-1">
             <span>5問</span>
-            <span>20問</span>
+            <span>30問</span>
           </div>
         </div>
       )}
@@ -255,7 +286,7 @@ export default function UploadPage() {
               <><Sparkles className="w-4 h-4" />{pendingCount}件を解析・生成</>
             )}
           </button>
-          {doneCount > 0 && (
+          {allDone && (
             <a href="/questions" className="px-4 py-3 text-primary-600 text-sm font-medium hover:underline">
               問題一覧を見る →
             </a>
