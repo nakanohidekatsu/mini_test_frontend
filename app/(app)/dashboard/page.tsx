@@ -15,7 +15,7 @@ export default async function DashboardPage() {
     { count: reviewDue },
     { data: todayLog },
   ] = await Promise.all([
-    supabase.from('questions').select('*', { count: 'exact', head: true }).eq('user_id', user!.id),
+    supabase.from('questions').select('*', { count: 'exact', head: true }),
     supabase.from('user_progress')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user!.id)
