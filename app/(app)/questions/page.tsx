@@ -239,6 +239,8 @@ export default function QuestionsPage() {
   const [keyword, setKeyword] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [questionSets, setQuestionSets] = useState<QuestionSet[]>([])
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   useEffect(() => {
     apiRequest<QuestionSet[]>('/api/v1/question-sets').then(setQuestionSets).catch(() => {})
@@ -292,7 +294,36 @@ export default function QuestionsPage() {
 
   function handleDeleted(id: string) {
     setQuestions(prev => prev.filter(q => q.id !== id))
+    setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next })
     setExpandedId(null)
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === questions.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(questions.map(q => q.id)))
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!confirm(`選択中の${selectedIds.size}件を削除しますか？`)) return
+    setBulkDeleting(true)
+    const ids = Array.from(selectedIds)
+    await Promise.allSettled(ids.map(id => apiRequest(`/api/v1/questions/${id}`, { method: 'DELETE' })))
+    setQuestions(prev => prev.filter(q => !selectedIds.has(q.id)))
+    setTotal(prev => prev - ids.length)
+    setSelectedIds(new Set())
+    setExpandedId(null)
+    setBulkDeleting(false)
   }
 
   const activeSetName = questionSets.find(s => s.id === filters.question_set_id)?.name
@@ -406,53 +437,97 @@ export default function QuestionsPage() {
         </div>
       ) : (
         <div className="space-y-2">
+          {/* 一括操作バー */}
+          {selectedIds.size > 0 && (
+            <div className="flex items-center justify-between px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+              <span className="text-sm text-red-700 dark:text-red-400 font-medium">
+                {selectedIds.size}件を選択中
+              </span>
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {bulkDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                一括削除
+              </button>
+            </div>
+          )}
+
+          {/* 全選択ヘッダー */}
+          <div className="flex items-center gap-3 px-4 py-2">
+            <input
+              type="checkbox"
+              checked={questions.length > 0 && selectedIds.size === questions.length}
+              onChange={toggleSelectAll}
+              className="w-4 h-4 accent-primary-600 cursor-pointer"
+              title="このページの全問題を選択"
+            />
+            <span className="text-xs text-slate-400">
+              {selectedIds.size > 0 ? `${selectedIds.size}件選択中` : 'すべて選択'}
+            </span>
+          </div>
+
           {questions.map((q, i) => {
             const globalIndex = ((filters.page ?? 1) - 1) * (filters.per_page ?? 20) + i + 1
             const setName = questionSets.find(s => s.id === q.question_set_id)?.name
             const isExpanded = expandedId === q.id
+            const isSelected = selectedIds.has(q.id)
             return (
               <div key={q.id} className={`bg-white dark:bg-slate-800 rounded-xl border transition-colors overflow-hidden ${
-                isExpanded
+                isSelected
+                  ? 'border-red-300 dark:border-red-700 bg-red-50/30 dark:bg-red-900/10'
+                  : isExpanded
                   ? 'border-primary-400 dark:border-primary-600'
                   : 'border-slate-200 dark:border-slate-700 hover:border-primary-300 dark:hover:border-primary-700'
               }`}>
-                {/* 問題ヘッダー（クリックで展開） */}
-                <button
-                  onClick={() => toggleExpand(q.id)}
-                  className="w-full flex items-start gap-4 p-4 text-left"
-                >
-                  <span className="shrink-0 w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center text-sm font-medium">
-                    {globalIndex}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-slate-900 dark:text-white text-sm font-medium line-clamp-2">{q.question_text}</p>
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      {setName && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 text-xs rounded-full">
-                          <FolderOpen className="w-3 h-3" />{setName}
-                        </span>
-                      )}
-                      {q.category && (
-                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs rounded-full">
-                          {q.category}
-                        </span>
-                      )}
-                      {q.difficulty && (
-                        <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${DIFFICULTY_COLORS[q.difficulty]}`}>
-                          {DIFFICULTY_LABELS[q.difficulty]}
-                        </span>
-                      )}
-                      {q.tags?.map(tag => (
-                        <span key={tag} className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs rounded-full">
-                          {tag}
-                        </span>
-                      ))}
+                {/* 問題ヘッダー */}
+                <div className="flex items-start gap-3 p-4">
+                  {/* チェックボックス */}
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleSelect(q.id)}
+                    className="mt-1 w-4 h-4 accent-primary-600 cursor-pointer shrink-0"
+                  />
+                  {/* 展開ボタン */}
+                  <button
+                    onClick={() => toggleExpand(q.id)}
+                    className="flex-1 flex items-start gap-3 text-left min-w-0"
+                  >
+                    <span className="shrink-0 w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center text-sm font-medium">
+                      {globalIndex}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-slate-900 dark:text-white text-sm font-medium line-clamp-2">{q.question_text}</p>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        {setName && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 text-xs rounded-full">
+                            <FolderOpen className="w-3 h-3" />{setName}
+                          </span>
+                        )}
+                        {q.category && (
+                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs rounded-full">
+                            {q.category}
+                          </span>
+                        )}
+                        {q.difficulty && (
+                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${DIFFICULTY_COLORS[q.difficulty]}`}>
+                            {DIFFICULTY_LABELS[q.difficulty]}
+                          </span>
+                        )}
+                        {q.tags?.map(tag => (
+                          <span key={tag} className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs rounded-full">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <span className="shrink-0 text-slate-400 mt-1">
-                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </span>
-                </button>
+                    <span className="shrink-0 text-slate-400 mt-1">
+                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </span>
+                  </button>
+                </div>
 
                 {/* 詳細・編集パネル */}
                 {isExpanded && (
