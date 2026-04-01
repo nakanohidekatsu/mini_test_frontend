@@ -259,7 +259,7 @@ export default function UploadPage() {
           <input
             type="range"
             min={5}
-            max={30}
+            max={50}
             value={maxQuestions}
             onChange={e => setMaxQuestions(Number(e.target.value))}
             disabled={running}
@@ -267,7 +267,7 @@ export default function UploadPage() {
           />
           <div className="flex justify-between text-xs text-slate-400 mt-1">
             <span>5問</span>
-            <span>30問</span>
+            <span>50問</span>
           </div>
         </div>
       )}
