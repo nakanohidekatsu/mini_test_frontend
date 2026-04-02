@@ -20,12 +20,23 @@ export default function SignupPage() {
     setLoading(true)
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { display_name: displayName } },
       })
       if (error) throw error
+
+      // メール確認が無効な場合はセッションが即時作成される
+      if (data.session) {
+        router.push('/dashboard')
+        router.refresh()
+        return
+      }
+
+      // メール確認が有効な場合はそのままログインを試みる
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+      if (signInError) throw signInError
       router.push('/dashboard')
       router.refresh()
     } catch (err: unknown) {
