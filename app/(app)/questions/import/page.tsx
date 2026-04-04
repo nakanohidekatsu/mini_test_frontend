@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { Upload, Loader2, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Upload, Loader2, CheckCircle, AlertCircle, ArrowLeft, FolderOpen } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { apiRequest } from '@/lib/api/client'
+import type { QuestionSet } from '@/types'
 
 interface ImportResult {
   imported: number
@@ -16,6 +18,12 @@ export default function ImportPage() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState('')
+  const [questionSets, setQuestionSets] = useState<QuestionSet[]>([])
+  const [selectedSetId, setSelectedSetId] = useState('')
+
+  useEffect(() => {
+    apiRequest<QuestionSet[]>('/api/v1/question-sets').then(setQuestionSets).catch(() => {})
+  }, [])
 
   async function handleImport(e: React.FormEvent) {
     e.preventDefault()
@@ -27,6 +35,7 @@ export default function ImportPage() {
     try {
       const formData = new FormData()
       formData.append('file', file)
+      if (selectedSetId) formData.append('question_set_id', selectedSetId)
 
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
@@ -62,6 +71,29 @@ export default function ImportPage() {
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 space-y-5">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <span className="flex items-center gap-1.5"><FolderOpen className="w-4 h-4" />問題集に追加（任意）</span>
+          </label>
+          {questionSets.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              問題集がありません。
+              <Link href="/question-sets" className="text-primary-600 hover:underline ml-1">問題集を作成する →</Link>
+            </p>
+          ) : (
+            <select
+              value={selectedSetId}
+              onChange={e => setSelectedSetId(e.target.value)}
+              className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">問題集に追加しない</option>
+              {questionSets.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
         <div>
           <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">ファイル形式</p>
           <div className="flex gap-3">

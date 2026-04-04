@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Play, Loader2, BookOpen, Clock, Shuffle, RotateCcw, AlertCircle, FolderOpen } from 'lucide-react'
+import { Play, Loader2, BookOpen, Shuffle, RotateCcw, AlertCircle, FolderOpen } from 'lucide-react'
 import { apiRequest } from '@/lib/api/client'
 import type { QuizMode, QuestionSet } from '@/types'
 
@@ -20,7 +20,6 @@ const MODES: Array<{ value: QuizMode; label: string; icon: React.ElementType; de
   { value: 'srs', label: '復習 (SRS)', icon: RotateCcw, desc: '今日復習すべき問題を出題' },
   { value: 'weak', label: '苦手問題', icon: AlertCircle, desc: '正答率の低い問題を優先' },
   { value: 'category', label: 'カテゴリ別', icon: BookOpen, desc: 'カテゴリを選んで出題' },
-  { value: 'question_set', label: '問題集', icon: FolderOpen, desc: '問題集を選んで出題' },
 ]
 
 export default function QuizStartPage() {
@@ -35,25 +34,20 @@ export default function QuizStartPage() {
   const [loadingSets, setLoadingSets] = useState(false)
 
   useEffect(() => {
-    if (mode === 'question_set') {
-      setLoadingSets(true)
-      apiRequest<QuestionSet[]>('/api/v1/question-sets')
-        .then(data => { setQuestionSets(data); if (data.length > 0 && !selectedSetId) setSelectedSetId(data[0].id) })
-        .catch(() => {})
-        .finally(() => setLoadingSets(false))
-    }
-  }, [mode])
+    setLoadingSets(true)
+    apiRequest<QuestionSet[]>('/api/v1/question-sets')
+      .then(setQuestionSets)
+      .catch(() => {})
+      .finally(() => setLoadingSets(false))
+  }, [])
 
   async function startQuiz() {
-    if (mode === 'question_set' && !selectedSetId) {
-      setError('問題集を選択してください')
-      return
-    }
     setLoading(true)
     setError('')
     try {
-      const body: Record<string, unknown> = { mode, limit }
-      if (mode === 'question_set') body.question_set_id = selectedSetId
+      const effectiveMode = selectedSetId ? 'question_set' : mode
+      const body: Record<string, unknown> = { mode: effectiveMode, limit }
+      if (selectedSetId) body.question_set_id = selectedSetId
       const data = await apiRequest<QuizStartResponse>('/api/v1/quiz/start', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -81,6 +75,35 @@ export default function QuizStartPage() {
       )}
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 space-y-5">
+        {/* 問題集選択（最初に表示） */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <span className="flex items-center gap-1.5"><FolderOpen className="w-4 h-4" />問題集（任意）</span>
+          </label>
+          {loadingSets ? (
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <Loader2 className="w-4 h-4 animate-spin" />読み込み中...
+            </div>
+          ) : questionSets.length === 0 ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              問題集がありません。
+              <a href="/question-sets" className="text-primary-600 hover:underline ml-1">問題集を作成する →</a>
+            </p>
+          ) : (
+            <select
+              value={selectedSetId}
+              onChange={e => setSelectedSetId(e.target.value)}
+              className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">すべての問題（指定なし）</option>
+              {questionSets.map(s => (
+                <option key={s.id} value={s.id}>{s.name}（{s.question_count ?? 0}問）</option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* 出題モード（問題集未選択時のみ有効） */}
         <div>
           <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">出題モード</p>
           <div className="grid grid-cols-2 gap-2">
@@ -88,46 +111,25 @@ export default function QuizStartPage() {
               <button
                 key={value}
                 onClick={() => setMode(value)}
+                disabled={!!selectedSetId}
                 className={`flex flex-col items-start p-3 rounded-lg border text-left transition-colors ${
-                  mode === value
+                  selectedSetId
+                    ? 'border-slate-200 dark:border-slate-600 opacity-40 cursor-not-allowed'
+                    : mode === value
                     ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                     : 'border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
                 }`}
               >
-                <Icon className={`w-5 h-5 mb-1.5 ${mode === value ? 'text-primary-600 dark:text-primary-400' : 'text-slate-500'}`} />
-                <span className={`text-sm font-medium ${mode === value ? 'text-primary-700 dark:text-primary-400' : 'text-slate-700 dark:text-slate-300'}`}>{label}</span>
+                <Icon className={`w-5 h-5 mb-1.5 ${!selectedSetId && mode === value ? 'text-primary-600 dark:text-primary-400' : 'text-slate-500'}`} />
+                <span className={`text-sm font-medium ${!selectedSetId && mode === value ? 'text-primary-700 dark:text-primary-400' : 'text-slate-700 dark:text-slate-300'}`}>{label}</span>
                 <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{desc}</span>
               </button>
             ))}
           </div>
+          {selectedSetId && (
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">問題集を選択中はランダムモードで出題されます</p>
+          )}
         </div>
-
-        {/* 問題集選択 */}
-        {mode === 'question_set' && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">問題集を選択</label>
-            {loadingSets ? (
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <Loader2 className="w-4 h-4 animate-spin" />読み込み中...
-              </div>
-            ) : questionSets.length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                問題集がありません。
-                <a href="/question-sets" className="text-primary-600 hover:underline ml-1">問題集を作成する →</a>
-              </p>
-            ) : (
-              <select
-                value={selectedSetId}
-                onChange={e => setSelectedSetId(e.target.value)}
-                className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                {questionSets.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}（{s.question_count ?? 0}問）</option>
-                ))}
-              </select>
-            )}
-          </div>
-        )}
 
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -149,7 +151,7 @@ export default function QuizStartPage() {
 
         <button
           onClick={startQuiz}
-          disabled={loading || (mode === 'question_set' && !selectedSetId)}
+          disabled={loading}
           className="w-full flex items-center justify-center gap-2 py-3 px-6 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors text-base"
         >
           {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}

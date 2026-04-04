@@ -150,6 +150,31 @@ export default function UploadPage() {
         <p className="text-slate-500 dark:text-slate-400 mt-1">複数PDFをまとめて解析し、一括で問題を生成</p>
       </div>
 
+      {/* 問題集選択（常時表示） */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          <span className="flex items-center gap-1.5"><FolderOpen className="w-4 h-4" />問題集に追加（任意）</span>
+        </label>
+        {questionSets.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            問題集がありません。
+            <a href="/question-sets" className="text-primary-600 hover:underline ml-1">問題集を作成する →</a>
+          </p>
+        ) : (
+          <select
+            value={selectedSetId}
+            onChange={e => setSelectedSetId(e.target.value)}
+            disabled={running}
+            className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="">問題集に追加しない</option>
+            {questionSets.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        )}
+      </div>
+
       {/* Drop zone */}
       <div
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
@@ -227,26 +252,6 @@ export default function UploadPage() {
         <div className="flex items-center gap-2 px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400 text-sm font-medium">
           <CheckCircle className="w-4 h-4" />
           {files.filter(f => f.status === 'done').length}ファイルから合計 <strong>{totalGenerated}問</strong> を生成しました
-        </div>
-      )}
-
-      {/* 問題集選択 */}
-      {hasFiles && questionSets.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            <span className="flex items-center gap-1.5"><FolderOpen className="w-4 h-4" />問題集に追加（任意）</span>
-          </label>
-          <select
-            value={selectedSetId}
-            onChange={e => setSelectedSetId(e.target.value)}
-            disabled={running}
-            className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">問題集に追加しない</option>
-            {questionSets.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
         </div>
       )}
 
