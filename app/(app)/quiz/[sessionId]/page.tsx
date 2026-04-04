@@ -51,7 +51,16 @@ export default function QuizSessionPage() {
 
   useEffect(() => {
     const stored = sessionStorage.getItem(`quiz_${sessionId}`)
-    if (stored) setQuestions(JSON.parse(stored))
+    if (stored) {
+      const qs: QuizQuestion[] = JSON.parse(stored)
+      qs.forEach(q => {
+        for (let i = q.question_choices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [q.question_choices[i], q.question_choices[j]] = [q.question_choices[j], q.question_choices[i]]
+        }
+      })
+      setQuestions(qs)
+    }
   }, [sessionId])
 
   useEffect(() => {
@@ -60,7 +69,7 @@ export default function QuizSessionPage() {
   }, [currentIndex])
 
   const currentQuestion = questions[currentIndex]
-  const choices = currentQuestion?.question_choices?.slice().sort((a, b) => a.display_order - b.display_order) ?? []
+  const choices = currentQuestion?.question_choices ?? []
 
   function formatTime(s: number) {
     const m = Math.floor(s / 60)
