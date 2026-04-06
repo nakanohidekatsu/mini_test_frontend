@@ -28,7 +28,11 @@ export default function HistoryPage() {
   const chartData = logs
     .slice()
     .reverse()
-    .map(l => ({ date: l.study_date, questions_answered: l.questions_answered }))
+    .map(l => ({
+      date: l.study_date,
+      questions_answered: l.questions_answered,
+      accuracy_rate: l.questions_answered > 0 ? Math.round(l.correct_answers / l.questions_answered * 100) : null,
+    }))
 
   return (
     <div className="space-y-6">

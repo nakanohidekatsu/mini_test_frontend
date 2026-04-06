@@ -8,6 +8,7 @@ interface StudyLog {
   study_date: string
   total_seconds: number
   questions_answered: number
+  correct_answers: number
 }
 
 export function useHistory() {
