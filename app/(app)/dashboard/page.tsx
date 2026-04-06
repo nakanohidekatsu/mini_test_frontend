@@ -8,30 +8,61 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   const now = new Date().toISOString()
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayDate = new Date()
+  const todayStr = todayDate.toISOString().split('T')[0]
+  const todayStart = todayStr + 'T00:00:00Z'
+  const tomorrowDate = new Date(todayDate)
+  tomorrowDate.setUTCDate(todayDate.getUTCDate() + 1)
+  const tomorrowStart = tomorrowDate.toISOString().split('T')[0] + 'T00:00:00Z'
 
   const [
     { count: totalQuestions },
     { count: reviewDue },
-    { data: todayLog },
+    { count: todayAnswerCount },
+    { data: streakLogs },
   ] = await Promise.all([
     supabase.from('questions').select('*', { count: 'exact', head: true }),
     supabase.from('user_progress')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user!.id)
       .lte('next_review_at', now),
+    supabase.from('quiz_session_answers')
+      .select('*', { count: 'exact', head: true })
+      .gte('answered_at', todayStart)
+      .lt('answered_at', tomorrowStart),
     supabase.from('study_logs')
-      .select('*')
+      .select('study_date')
       .eq('user_id', user!.id)
-      .eq('study_date', todayStr)
-      .maybeSingle(),
+      .order('study_date', { ascending: false })
+      .limit(365),
   ])
+
+  // 昨日まで何日連続で回答しているか算出
+  const logDates = new Set((streakLogs ?? []).map((l: { study_date: string }) => l.study_date))
+  let streakDays = 0
+  for (let i = 1; ; i++) {
+    const d = new Date(todayDate)
+    d.setUTCDate(todayDate.getUTCDate() - i)
+    const dateStr = d.toISOString().split('T')[0]
+    if (logDates.has(dateStr)) {
+      streakDays++
+    } else {
+      break
+    }
+  }
+
+  // 今日の学習ログ（学習時間の表示用）
+  const { data: todayLog } = await supabase.from('study_logs')
+    .select('questions_answered, total_seconds')
+    .eq('user_id', user!.id)
+    .eq('study_date', todayStr)
+    .maybeSingle()
 
   const stats = [
     { label: '総問題数', value: totalQuestions ?? 0, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
     { label: '復習待ち', value: reviewDue ?? 0, icon: Clock, color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-900/20' },
-    { label: '今日の回答', value: todayLog?.questions_answered ?? 0, icon: Target, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
-    { label: '連続日数', value: 0, icon: Flame, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20' },
+    { label: '今日の回答', value: todayAnswerCount ?? 0, icon: Target, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
+    { label: '連続日数', value: streakDays, icon: Flame, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20' },
   ]
 
   return (

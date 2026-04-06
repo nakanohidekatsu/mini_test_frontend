@@ -13,6 +13,7 @@ const StatsChart = dynamic(() => import('./StatsChart'), { ssr: false })
 interface StudyLog {
   study_date: string
   questions_answered: number
+  correct_answers: number
 }
 
 interface DashboardClientProps {
@@ -35,7 +36,13 @@ export default function DashboardClient({ reviewDueCount, todayAnswered, todaySe
     d.setDate(d.getDate() - (13 - i))
     const dateStr = d.toISOString().split('T')[0]
     const log = history.find(l => l.study_date === dateStr)
-    return { date: dateStr, questions_answered: log?.questions_answered ?? 0 }
+    const answered = log?.questions_answered ?? 0
+    const correct = log?.correct_answers ?? 0
+    return {
+      date: dateStr,
+      questions_answered: answered,
+      accuracy_rate: answered > 0 ? Math.round(correct / answered * 100) : null,
+    }
   })
 
   return (

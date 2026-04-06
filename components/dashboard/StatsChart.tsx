@@ -1,10 +1,11 @@
 'use client'
 
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 interface DailyActivity {
   date: string
   questions_answered: number
+  accuracy_rate: number | null
 }
 
 interface StatsChartProps {
@@ -20,11 +21,9 @@ export default function StatsChart({ data }: StatsChartProps) {
     )
   }
 
-  const max = Math.max(...data.map(d => d.questions_answered), 1)
-
   return (
-    <ResponsiveContainer width="100%" height={120}>
-      <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={140}>
+      <ComposedChart data={data} margin={{ top: 4, right: 28, left: -20, bottom: 0 }}>
         <XAxis
           dataKey="date"
           tick={{ fontSize: 10, fill: '#94a3b8' }}
@@ -35,21 +34,49 @@ export default function StatsChart({ data }: StatsChartProps) {
           axisLine={false}
           tickLine={false}
         />
-        <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+        <YAxis
+          yAxisId="left"
+          tick={{ fontSize: 10, fill: '#94a3b8' }}
+          axisLine={false}
+          tickLine={false}
+          allowDecimals={false}
+        />
+        <YAxis
+          yAxisId="right"
+          orientation="right"
+          domain={[0, 100]}
+          tick={{ fontSize: 10, fill: '#94a3b8' }}
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={v => `${v}%`}
+        />
         <Tooltip
           contentStyle={{ background: '#1e293b', border: 'none', borderRadius: 8, fontSize: 12, color: '#f1f5f9' }}
           labelFormatter={v => {
             const d = new Date(v as string)
             return `${d.getMonth() + 1}月${d.getDate()}日`
           }}
-          formatter={(v: number) => [`${v}問`, '回答数']}
+          formatter={(v: number, name: string) => {
+            if (name === 'questions_answered') return [`${v}問`, '回答数']
+            if (name === 'accuracy_rate') return [`${v}%`, '正答率']
+            return [v, name]
+          }}
         />
-        <Bar dataKey="questions_answered" radius={[4, 4, 0, 0]}>
+        <Bar yAxisId="left" dataKey="questions_answered" radius={[4, 4, 0, 0]}>
           {data.map((entry, i) => (
             <Cell key={i} fill={entry.questions_answered > 0 ? '#3b82f6' : '#e2e8f0'} />
           ))}
         </Bar>
-      </BarChart>
+        <Line
+          yAxisId="right"
+          type="monotone"
+          dataKey="accuracy_rate"
+          stroke="#22c55e"
+          strokeWidth={2}
+          dot={false}
+          connectNulls={false}
+        />
+      </ComposedChart>
     </ResponsiveContainer>
   )
 }
