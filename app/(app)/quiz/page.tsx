@@ -61,7 +61,7 @@ export default function QuizStartPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-lg">
+    <div className="space-y-6 max-w-lg pb-20 md:pb-0">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">クイズ</h1>
         <p className="text-slate-500 dark:text-slate-400 mt-1">出題モードを選んで学習を始める</p>

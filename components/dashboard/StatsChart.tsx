@@ -28,8 +28,8 @@ export default function StatsChart({ data }: StatsChartProps) {
           dataKey="date"
           tick={{ fontSize: 10, fill: '#94a3b8' }}
           tickFormatter={v => {
-            const d = new Date(v)
-            return `${d.getMonth() + 1}/${d.getDate()}`
+            const [, m, day] = v.split('-')
+            return `${parseInt(m)}/${parseInt(day)}`
           }}
           axisLine={false}
           tickLine={false}
@@ -53,8 +53,8 @@ export default function StatsChart({ data }: StatsChartProps) {
         <Tooltip
           contentStyle={{ background: '#1e293b', border: 'none', borderRadius: 8, fontSize: 12, color: '#f1f5f9' }}
           labelFormatter={v => {
-            const d = new Date(v as string)
-            return `${d.getMonth() + 1}月${d.getDate()}日`
+            const [, m, day] = (v as string).split('-')
+            return `${parseInt(m)}月${parseInt(day)}日`
           }}
           formatter={(v: number, name: string) => {
             if (name === 'questions_answered') return [`${v}問`, '回答数']

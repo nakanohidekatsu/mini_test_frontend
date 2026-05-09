@@ -34,7 +34,7 @@ export default function DashboardClient({ reviewDueCount, todayAnswered, todaySe
   const chartData = Array.from({ length: 14 }, (_, i) => {
     const d = new Date()
     d.setDate(d.getDate() - (13 - i))
-    const dateStr = d.toISOString().split('T')[0]
+    const dateStr = d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' })
     const log = history.find(l => l.study_date === dateStr)
     const answered = log?.questions_answered ?? 0
     const correct = log?.correct_answers ?? 0
