@@ -92,31 +92,29 @@ export default function DashboardClient({ reviewDueCount, todayAnswered, todaySe
 
       <div className="space-y-4">
         <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-3">
-            <button
-              onClick={handleToggleCategoryStats}
-              className="flex items-center gap-1 font-semibold text-slate-900 dark:text-white hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-            >
-              過去の学習履歴
-              {showCategoryStats ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            <div className="flex gap-1">
-              {([7, 14, 30] as const).map(d => (
-                <button
-                  key={d}
-                  onClick={() => setDays(d)}
-                  className={`px-2 py-0.5 text-xs rounded-md transition-colors ${
-                    days === d
-                      ? 'bg-primary-600 text-white'
-                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  {d}日
-                </button>
-              ))}
-            </div>
-          </div>
+          <button
+            onClick={handleToggleCategoryStats}
+            className="flex items-center gap-1 font-semibold text-slate-900 dark:text-white hover:text-primary-600 dark:hover:text-primary-400 transition-colors mb-3"
+          >
+            過去の学習履歴
+            {showCategoryStats ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
           <StatsChart data={chartData} />
+          <div className="flex justify-end gap-1 mt-2">
+            {([7, 14, 30] as const).map(d => (
+              <button
+                key={d}
+                onClick={() => setDays(d)}
+                className={`px-2 py-0.5 text-xs rounded-md transition-colors ${
+                  days === d
+                    ? 'bg-primary-600 text-white'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}
+              >
+                {d}日
+              </button>
+            ))}
+          </div>
           {showCategoryStats && (
             <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
               {loadingCategory ? (
