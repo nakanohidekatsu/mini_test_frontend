@@ -23,7 +23,7 @@ export default function StatsChart({ data }: StatsChartProps) {
 
   return (
     <ResponsiveContainer width="100%" height={140}>
-      <ComposedChart data={data} margin={{ top: 4, right: 28, left: -20, bottom: 0 }}>
+      <ComposedChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
         <XAxis
           dataKey="date"
           tick={{ fontSize: 10, fill: '#94a3b8' }}
